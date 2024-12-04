@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  eureka-server:
+    build:
+      context: ./com.sparta.msa_exam/
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:19090/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  eureka-client-gateway:
+    build:
+      context: ./com.sparta.msa_exam.gateway/
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    ports:
+      - "19091:19091"
+    environment:
+      eureka.client.service-url.defaultZone: http://eureka-server:19090/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+
+  eureka-client-auth:
+    build:
+      context: ./com.sparta.msa_exam.auth/
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    environment:
+      eureka.client.service-url.defaultZone: http://eureka-server:19090/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+
+  eureka-client-order:
+    build:
+      context: ./com.sparta.msa_exam.order/
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    environment:
+      eureka.client.service-url.defaultZone: http://eureka-server:19090/eureka/
+      management.zipkin.tracing.endpoint: http://zipkin-server:9411/api/v2/spans
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      zipkin-server:
+        condition: service_healthy
+
+  eureka-client-product:
+    build:
+      context: ./com.sparta.msa_exam.product/
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    environment:
+      eureka.client.service-url.defaultZone: http://eureka-server:19090/eureka/
+      management.zipkin.tracing.endpoint: http://zipkin-server:9411/api/v2/spans
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      zipkin-server:
+        condition: service_healthy
+
+  zipkin-server:
+    image: openzipkin/zipkin:latest
+    ports:
+      - '9411:9411'
+    networks:
+      - app-network
+
+  redis-stack:
+    image: redis/redis-stack
+    container_name: redis-stack-compose
+    restart: always
+    environment:
+      REDIS_ARGS: "--requirepass systempass"
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
